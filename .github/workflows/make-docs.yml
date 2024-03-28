@@ -67,7 +67,7 @@ jobs:
     - uses: actions/configure-pages@v4
 
     # upload docs directory
-    - uses: actions/upload-pages-artifact@v4
+    - uses: actions/upload-pages-artifact@v3
       with:
         # Upload contents of docs directory
         path: "docs"
