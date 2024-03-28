@@ -36,11 +36,6 @@ SET CONDA_DIR="%~dp0env"
 :: Jump to command
 GOTO %1
 
-:: Perform data preprocessing steps contained in the make_data.py script.
-:data
-    CALL conda run -p %CONDA_DIR% python src/make_data.py
-    GOTO end
-
 :: Make documentation using Sphinx!
 :docs
     CALL conda run -p %CONDA_DIR% sphinx-build -a -b html docsrc docs
@@ -58,8 +53,13 @@ GOTO %1
     :: Add more fun stuff from environment file
     CALL conda env update -p %CONDA_DIR% -f environment.yml
 
+    :: Install spark-esri
+    CALL conda run -p %CONDA_DIR% python -m pip install git+https://github.com/mraad/spark-esri
+
     :: Install the local package in development (experimental) mode
     CALL conda run -p %CONDA_DIR% python -m pip install -e .
+
+    GOTO end
 
 :: Remove the environment
 :remove_env
