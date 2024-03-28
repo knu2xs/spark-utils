@@ -30,7 +30,7 @@ jobs:
     steps:
 
     # get the repo contents
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     # install pandoc so nbsphinx will work
     - name: Install PanDoc
@@ -64,10 +64,10 @@ jobs:
       run: conda run -n sphinx sphinx-build -a -b html docsrc docs
 
     # ensure pages configured correctly
-    - uses: actions/configure-pages@v2
+    - uses: actions/configure-pages@v4
 
     # upload docs directory
-    - uses: actions/upload-pages-artifact@v1
+    - uses: actions/upload-pages-artifact@v4
       with:
         # Upload contents of docs directory
         path: "docs"
@@ -92,4 +92,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v3
