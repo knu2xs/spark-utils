@@ -63,9 +63,6 @@ jobs:
     - name: Build Sphinx Documentation
       run: conda run -n sphinx sphinx-build -a -b html docsrc docs
 
-    # ensure pages configured correctly
-#    - uses: actions/configure-pages@v4
-
     # ensure permissions correctly configured
     - name: Check Permissions
       run: |

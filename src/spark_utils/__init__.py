@@ -1,8 +1,8 @@
-__title__ = 'spark-utils'
-__version__ = '0.0.0'
-__author__ = 'Joel McCune (https://github.com/knu2xs)'
-__license__ = 'Apache 2.0'
-__copyright__ = 'Copyright 2023 by Joel McCune (https://github.com/knu2xs)'
+__title__ = "spark-utils"
+__version__ = "0.0.0"
+__author__ = "Joel McCune (https://github.com/knu2xs)"
+__license__ = "Apache 2.0"
+__copyright__ = "Copyright 2023 by Joel McCune (https://github.com/knu2xs)"
 
 import importlib.util
 import logging
@@ -30,6 +30,18 @@ __all__ = [
     "save_to_parquet",
     "save_parquet_with_schema",
 ]
+
+# detect if in AWS EMR...only environment using 'livy' users in both these contexts
+in_aws_emr = os.environ.get("USER") == "livy" and os.environ.get("SPARK_USER") == "livy"
+
+# detect if windows
+is_win = os.name == "nt"
+
+# detect if mac
+is_mac = os.name = "darwin"
+
+# detect if in Azure Databricks
+in_databricks = os.environ.get("DATABRICKS_RUNTIME_VERSION") is not None
 
 
 def get_pro_install_path(raise_err: bool = False) -> Path:
@@ -90,9 +102,6 @@ def get_spark_session(
     Returns:
         SparkSession ready to do work.
     """
-    # late import to avoid circular import
-    from ._utils_env import in_aws_emr, is_win, is_mac
-
     # get a dict of input parameters to interact with
     kwargs = locals()
 
@@ -542,5 +551,4 @@ def save_parquet_with_schema(
         percent_padding=schema_percent_padding,
     )
 
-    return out_dir
-
+    return output_directory
