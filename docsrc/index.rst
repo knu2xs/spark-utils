@@ -11,3 +11,4 @@ Contents
     :maxdepth: 2
 
     Spark-Utils API<api>
+    Getting a Spark Session<notebooks/get-spark-session>
