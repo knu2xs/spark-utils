@@ -4,13 +4,14 @@ __author__ = "Joel McCune (https://github.com/knu2xs)"
 __license__ = "Apache 2.0"
 __copyright__ = "Copyright 2023 by Joel McCune (https://github.com/knu2xs)"
 
-import importlib.util
 import logging
 import os
-from pathlib import Path
+from glob import glob
 from typing import Optional, Union, List, Dict
 
-from pyspark import SparkConf
+from pyspark import SparkConf, SparkContext
+
+# from py4j.java_gateway import JavaGateway
 from pyspark.sql import SparkSession, DataFrame
 import pyspark.sql.functions as fns
 from pyspark.sql.types import (
@@ -21,6 +22,7 @@ from pyspark.sql.types import (
     ArrayType,
     MapType,
 )
+from subprocess import Popen
 
 __all__ = [
     "get_spark_session",
@@ -38,13 +40,13 @@ in_aws_emr = os.environ.get("USER") == "livy" and os.environ.get("SPARK_USER") =
 is_win = os.name == "nt"
 
 # detect if mac
-is_mac = os.name = "darwin"
+is_mac = os.name == "darwin"
 
 # detect if in Azure Databricks
 in_databricks = os.environ.get("DATABRICKS_RUNTIME_VERSION") is not None
 
 
-def get_pro_install_path(raise_err: bool = False) -> Path:
+def get_pro_install_path(raise_err: bool = False) -> str:
     """
     Retrieve the ArcGIS Pro install path.
 
@@ -55,12 +57,13 @@ def get_pro_install_path(raise_err: bool = False) -> Path:
     try:
         # late import
         import winreg
+        from pathlib import WindowsPath
 
         # get the key keeping the install location for ArcGIS Pro
         agp_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, "SOFTWARE\ESRI\ArcGISPro")
 
         # pull out the install path
-        pro_install_pth = Path(winreg.QueryValueEx(agp_key, "InstallDir")[0])
+        pro_install_pth = winreg.QueryValueEx(agp_key, "InstallDir")[0]
 
         # catch the error when the key is not present
     except NameError:
@@ -84,10 +87,10 @@ def get_pro_install_path(raise_err: bool = False) -> Path:
 
 def get_spark_session(
     spark_application_name: Optional[str] = "Business Analyst Data Engineering",
-    java_home_path: Union[str, Path] = None,
-    spark_home_path: Union[str, Path] = None,
-    hadoop_home_path: Union[str, Path] = None,
-    geoanalytics_resources: Union[str, Path, Dict[str, str]] = None,
+    java_home_path: str = None,
+    spark_home_path: str = None,
+    hadoop_home_path: str = None,
+    geoanalytics_resources: Union[str, Dict[str, str]] = None,
 ) -> SparkSession:
     """
     Get a spark session with the spatial data libraries loaded.
@@ -173,10 +176,16 @@ def get_spark_session(
                 resc_dict[pth_var] = pth
 
         # if ArcGIS Pro installed, and other paths are not explicitly defined, piggyback on Pro's included assets
-        if pro_pth.exists():
-            resc_dict["java_home_path"] = pro_pth / r"java\runtime\jvm"
-            resc_dict["hadoop_home_path"] = pro_pth / r"java\runtime\hadoop"
-            resc_dict["spark_home_path"] = pro_pth / r"java\runtime\spark"
+        if os.path.exists(pro_pth):
+            resc_dict["java_home_path"] = os.path.join(
+                pro_pth, "java", "runtime", "jvm"
+            )
+            resc_dict["hadoop_home_path"] = os.path.join(
+                pro_pth, "java", "runtime", "hadoop"
+            )
+            resc_dict["spark_home_path"] = os.path.join(
+                pro_pth, "java", "runtime", "spark"
+            )
 
         # unpack resource paths
         java_home_path = resc_dict.get("java_home_path")
@@ -186,12 +195,8 @@ def get_spark_session(
 
         # if adding geoanalytics, locate resources and add to config
         if geoanalytics_resources is not None:
-            # if geoanalytics is a string, make into a path
-            if isinstance(geoanalytics_resources, str):
-                geoanalytics_resources = Path(geoanalytics_resources)
-
             # get all included JARS; this should include the H3 jar as well for GA H3 functions to work
-            jar_pth_lst = list(geoanalytics_resources.glob("*.jar"))
+            jar_pth_lst = glob(os.path.join(geoanalytics_resources, "*.jar"))
             if len(jar_pth_lst) == 0:
                 raise ValueError(
                     "Cannot locate any JAR files in the provided Geoanalytics directory. Please check the "
@@ -200,7 +205,7 @@ def get_spark_session(
             jar_pth = ",".join([str(pth) for pth in jar_pth_lst])
 
             # get the python wheel file for geoanalytics
-            py_pth = list(geoanalytics_resources.glob("geoanalytics*.whl"))
+            py_pth = glob(os.path.join(geoanalytics_resources, "geoanalytics*.whl"))
             if len(py_pth) == 0:
                 raise ValueError(
                     "Cannot locate Geoanalytics wheel file. Please check the path and ensure it is "
@@ -209,13 +214,14 @@ def get_spark_session(
             py_pth = str(py_pth[0])
 
             # get all license files
-            lic_pth_lst = list(geoanalytics_resources.glob("*.ecp"))
+            lic_pth_lst = glob(os.path.join(geoanalytics_resources, "*.ecp"))
 
             # pull out the streetmap license file
             smp_lic_pth = [
                 pth
                 for pth in lic_pth_lst
-                if "smp" in pth.name.lower() or "streetmap" in pth.name.lower()
+                if "smp" in os.path.basename(pth).lower()
+                or "streetmap" in os.path.basename(pth).lower().lower()
             ]
             if len(smp_lic_pth) == 0:
                 logging.warning("StreetMap Premium license file not located.")
@@ -226,7 +232,8 @@ def get_spark_session(
             ga_lic_pth = [
                 pth
                 for pth in lic_pth_lst
-                if "smp" not in pth.name.lower() and "streetmap" not in pth.name.lower()
+                if "smp" not in os.path.basename(pth).lower().lower()
+                and "streetmap" not in os.path.basename(pth).lower().lower()
             ]
             if len(ga_lic_pth) == 0:
                 raise ValueError(
@@ -254,27 +261,42 @@ def get_spark_session(
             # shut down any currently active local sessions (only one can be active in a local environment)
             spark_stop()
 
-    # if using Spark shipped with Pro in a local environment, use spark-esri
-    if pro_pth is not None:
-        # ensure spark-esri is installed and provide a useful error if it is not
-        if importlib.util.find_spec("spark_esri") is None:
-            raise EnvironmentError(
-                "Please install spark-esri (https://github.com/mraad/spark-esri) to continue."
-            )
+    # create the spark session using the provided parameters
+    spark = (
+        SparkSession.builder.appName(spark_application_name)
+        .config(conf=conf)
+        .getOrCreate()
+    )
 
-        # late import because only installed in environment with Pro
-        from spark_esri import spark_start
+    # if using Spark shipped with Pro in a local environment, have to manage the py4j gateway manually
+    # if pro_pth is not None:
+    #     # launch the gateway (borrowed from mraad/spark-esri)
+    #     gateway = JavaGateway.launch_gateway(
+    #         # must redirect stdout & stderr when running in Pro or JVM fails immediately
+    #         redirect_stdout=None,
+    #         redirect_stderr=None,
+    #         enable_auth=True,
+    #         # keeps the command-line window from showing
+    #         use_shell=True,
+    #     )
+    #
+    #     # use the gateway to create a spark context
+    #     spark_context = SparkContext()
 
-        # use built up config with spark_esri to get a spark session
-        spark = spark_start(conf._conf)
-
-    # otherwise, use spark session builder directly
-    else:
-        spark = (
-            SparkSession.builder.appName(spark_application_name)
-            .config(conf=conf)
-            .getOrCreate()
-        )
+    #     # use the spark context to build the spark session
+    #     spark = (
+    #         SparkSession.builder.appName(spark_application_name)
+    #         .config(conf=conf)
+    #         .getOrCreate()
+    #     )
+    #
+    # # otherwise, use spark session builder directly
+    # else:
+    #     spark = (
+    #         SparkSession.builder.appName(spark_application_name)
+    #         .config(conf=conf)
+    #         .getOrCreate()
+    #     )
 
     return spark
 
@@ -285,18 +307,39 @@ def spark_stop() -> None:
     Spark bundled with Pro, there are a few more loose ends needing to be tied up. This function provides a
     standard way to perform this task regardless of the environment.
     """
-    # determine if using Spark bundled with ArcGIS Pro by checking if using Spark in Pro path (path contains "arcgis")
-    if "arcgis" in os.environ["SPARK_HOME"].lower():
-        # late import because only available in environment with Pro
-        from spark_esri import spark_stop as spark_esri_stop
+    # retrieve the active spark session
+    spark = SparkSession.getActiveSession()
 
-        # stop using spark_esri
-        spark_esri_stop()
+    # ensure there is an active spark session
+    if isinstance(spark, SparkSession):
+        # determine if using Spark bundled with ArcGIS Pro by checking if Spark in Pro path (path contains "arcgis")
+        if (
+            "arcgis" in os.environ["SPARK_HOME"].lower()
+            and SparkContext._gateway is not None
+        ):
+            # extract the gateway out of the spark session configuration
+            gateway = spark.sparkContext._gateway
 
-    # otherwise, stop using SparkSession stop method with active session
-    else:
-        spark = SparkSession.getActiveSession()
-        if isinstance(spark, SparkSession):
+            # stop the spark session
+            spark.stop()
+
+            # ensure the gateway is completely axed
+            gateway.shutdown()
+            gateway.proc.stdin.close()
+
+            # ensure that process and all children are killed
+            Popen(
+                ["cmd", "/c", "taskkill", "/f", "/t", "/pid", str(gateway.proc.pid)],
+                shell=True,
+                stdout=os.devnull,
+                stderr=os.devnull,
+            )
+
+            # set the spark context gateway to nothing to tie up loose ends
+            SparkContext._gateway = None
+
+        # otherwise, stop using SparkSession stop method...simple
+        else:
             spark.stop()
 
 
@@ -338,7 +381,7 @@ def get_column_name_if_exists(
 
 def save_to_parquet(
     dataset: DataFrame,
-    parquet_path: Union[Path, str],
+    parquet_path: str,
     partitioning_columns: Optional[Union[str, List[str]]] = None,
     max_records_per_file: int = 300000,
 ) -> str:
@@ -359,8 +402,9 @@ def save_to_parquet(
         partitioning_columns: Column name or list of column names to partition by.
 
     """
-    # ensure the path is a string so Spark can use it
-    parquet_path = str(parquet_path) if isinstance(parquet_path, Path) else parquet_path
+    # ensure is string so can be used...accounts for Path objects being passed in
+    if not isinstance(parquet_path, str):
+        parquet_path = str(parquet_path)
 
     # if not partitioning, save without partitioning options
     if partitioning_columns is None:
@@ -385,7 +429,7 @@ def save_to_parquet(
 
 def get_schema_dataframe(
     dataframe: DataFrame,
-    output_schema_file: Optional[Union[str, Path]] = None,
+    output_schema_file: Optional[str] = None,
     percent_padding: Optional[float] = None,
 ) -> DataFrame:
     """
@@ -405,18 +449,11 @@ def get_schema_dataframe(
         elif percent_padding < 0.0 or percent_padding > 1.0:
             raise ValueError(err_msg)
 
-    # handle if should be path or string
-    if isinstance(output_schema_file, Path):
-        out_pth = str(output_schema_file)
-
-        # ensure the s3 paths have the correct prefix
-        if out_pth.lower().startswith("s3:/") and not out_pth.lower().startswith(
-            "s3://"
-        ):
-            out_pth = out_pth.replace("s3:/", "s3://")
-
-    else:
-        out_pth = output_schema_file
+    # ensure the s3 paths have the correct prefix
+    if output_schema_file.lower().startswith(
+        "s3:/"
+    ) and not output_schema_file.lower().startswith("s3://"):
+        output_schema_file = output_schema_file.replace("s3:/", "s3://")
 
     # output CSV column list
     out_col_lst = [
@@ -483,20 +520,20 @@ def get_schema_dataframe(
     schm_df = schm_df.select(out_col_lst).repartition(1)
 
     # save the schema file
-    if out_pth is not None:
-        schm_df.write.mode("overwrite").csv(str(out_pth), header=True)
+    if output_schema_file is not None:
+        schm_df.write.mode("overwrite").csv(str(output_schema_file), header=True)
 
     return schm_df
 
 
 def save_parquet_with_schema(
     dataset: DataFrame,
-    output_directory: Union[str, Path],
+    output_directory: str,
     partitioning_columns: Optional[Union[str, List[str]]] = None,
     schema_percent_padding: Optional[float] = None,
     bool_to_int: bool = True,
     complex_to_json: bool = True,
-) -> Path:
+) -> str:
     """
     Write a PySpark data frame to a Parquet dataset with the schema string lengths as a comma-separated-file (CSV) in
     the standard directory structure automatically recognized for importing into ArcGIS Pro.
@@ -516,13 +553,9 @@ def save_parquet_with_schema(
         complex_to_json: Optionally downcast any complex columns (``ArrayType``, ``MapType``, ``StructType``) to
             JSON string representations for compatibility with ArcGIS Pro. Default is ``True``.
     """
-    # make sure the path is...a Path
-    if not isinstance(output_directory, Path):
-        output_directory = Path(output_directory)
-
     # if the last part of the path is the parquet directory, use the parent
-    if output_directory.name == "parquet":
-        output_directory = output_directory.parent
+    if os.path.basename(output_directory) == "parquet":
+        output_directory = os.path.dirname(output_directory)
 
     # cast any boolean to integers if desired
     if bool_to_int:
@@ -540,14 +573,14 @@ def save_parquet_with_schema(
     # save the parquet data with any optional partitions
     save_to_parquet(
         dataset,
-        parquet_path=output_directory / "parquet",
+        parquet_path=os.path.join(output_directory, "parquet"),
         partitioning_columns=partitioning_columns,
     )
 
     # save the schema to the same location
     get_schema_dataframe(
         dataset,
-        output_schema_file=output_directory / "schema",
+        output_schema_file=os.path.join(output_directory, "schema"),
         percent_padding=schema_percent_padding,
     )
 

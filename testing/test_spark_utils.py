@@ -10,11 +10,17 @@ import sys
 self_pth = Path(__file__)
 dir_test = self_pth.parent
 dir_prj = dir_test.parent
-dir_src = dir_prj/'src'
+dir_src = dir_prj / "src"
 
 # insert the src directory into the path and import the projct package
 sys.path.insert(0, str(dir_src))
 import spark_utils
 
-def test_example():
-    assert 2 + 2 == 4
+
+def test_get_spark_session_defaults():
+    from pyspark.sql import SparkSession
+    from geoanalytics import auth_info
+
+    spark = spark_utils.get_spark_session()
+    assert isinstance(spark, SparkSession)
+    assert auth_info().toPandas().set_index("name").loc["authorized"].iloc[0] == "true"

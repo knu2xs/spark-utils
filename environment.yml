@@ -13,7 +13,7 @@ dependencies:
   - pytest
   - python=3.9.*
   - pyarrow
-  - pyspark=3.4.*
+  - pyspark=3.4.1
   - pyyaml
   - pip:
     - autodocsumm

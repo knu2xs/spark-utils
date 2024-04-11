@@ -2,6 +2,10 @@
 
 Utilities I use for streamlining Spark tasks.
 
+## Requirements
+
+- Download and add to Geoenrichment directory (Required by Geoanalytics)[Joda-Time](https://github.com/JodaOrg/joda-time/releases)
+
 ## BumpVersion Cliff Notes
 
 - apply a patch, `bumpversion patch`

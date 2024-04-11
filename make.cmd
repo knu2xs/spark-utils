@@ -53,9 +53,6 @@ GOTO %1
     :: Add more fun stuff from environment file
     CALL conda env update -p %CONDA_DIR% -f environment.yml
 
-    :: Install spark-esri
-    CALL conda run -p %CONDA_DIR% python -m pip install git+https://github.com/mraad/spark-esri
-
     :: Install the local package in development (experimental) mode
     CALL conda run -p %CONDA_DIR% python -m pip install -e .
 
