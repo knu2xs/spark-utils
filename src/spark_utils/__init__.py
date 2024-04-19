@@ -328,12 +328,12 @@ def spark_stop() -> None:
             gateway.proc.stdin.close()
 
             # ensure that process and all children are killed
-            Popen(
-                ["cmd", "/c", "taskkill", "/f", "/t", "/pid", str(gateway.proc.pid)],
-                shell=True,
-                stdout=os.devnull,
-                stderr=os.devnull,
-            )
+            # Popen(
+            #     ["cmd", "/c", "taskkill", "/f", "/t", "/pid", str(gateway.proc.pid)],
+            #     shell=True,
+            #     stdout=os.devnull,
+            #     stderr=os.devnull,
+            # )
 
             # set the spark context gateway to nothing to tie up loose ends
             SparkContext._gateway = None
