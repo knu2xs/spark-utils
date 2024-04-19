@@ -10,5 +10,6 @@ Contents
 .. toctree::
     :maxdepth: 2
 
+    Setup<setup>
     Spark-Utils API<api>
     Getting a Spark Session<notebooks/get-spark-session>

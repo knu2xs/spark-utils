@@ -5,24 +5,9 @@ channels:
   - conda-forge
 
 dependencies:
-  - black>=21
+  - arcgis
   - jupyterlab
-  - jupyterlab_code_formatter
-  - pandoc
-  - pip
-  - pytest
   - python=3.9.*
   - pyarrow
   - pyspark=3.4.1
   - pyyaml
-  - pip:
-    - autodocsumm
-    - build
-    - bump2version
-    - furo
-    - nbsphinx
-    - sphinx
-    - sphinxcontrib-youtube
-    - sphinx-autodoc-typehints
-    - sphinx-copybutton
-    - twine

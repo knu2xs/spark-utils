@@ -41,21 +41,34 @@ GOTO %1
     CALL conda run -p %CONDA_DIR% sphinx-build -a -b html docsrc docs
     GOTO end
 
-:: Build the local environment from the environment file
+:: Get all resources needed to run Geoanalytics locally
+:setup
+    CALL mkdir C:\opt\geoanalytics
+    CALL robocopy \\metro\GeoAnalyticsEngine\1.4.0\ C:\opt\geoanalytics\ *.jar /mt /z
+    CALL robocopy \\metro\GeoAnalyticsEngine\1.4.0\peData\ C:\opt\geoanalytics\ *.jar /mt /z
+    CALL copy \\metro\Released\Authorization_Files\ArcGISGeoAnalyticsEngine\1.0\GeoAnalytics_OnDemand_Engine.ecp C:\opt\geoanalytics\geoanalytics_license.ecp
+    CALL robocopy \\esri.com\software\Esri\Released\StreetMap_Premium_for_ArcGIS\HERE\North_America_2023R4\Pro_and_Enterprise_GCS_MMPK\ C:\opt\geoanalytics\ United_States.mmpk /mt /z
+    CALL copy \\metro\Released\Authorization_Files\ArcGISRuntimeSDK\Version100.0\licenseKeys.txt C:\opt\geoanalytics\smp_license.ecp
+    GOTO env
+
+:: Build the local environment
 :env
-    :: Create new environment from environment file
     CALL conda create -p %CONDA_DIR% --clone "C:\Program Files\ArcGIS\Pro\bin\Python\envs\arcgispro-py3"
     GOTO add_dependencies
 
+:env_dev
+    CALL conda create -p %CONDA_DIR% --clone "C:\Program Files\ArcGIS\Pro\bin\Python\envs\arcgispro-py3"
+    GOTO add_dev_dependencies
+
 :: Add python dependencies from environment.yml to the project environment
 :add_dependencies
-        
-    :: Add more fun stuff from environment file
     CALL conda env update -p %CONDA_DIR% -f environment.yml
+    CALL conda run -p %CONDA_DIR% python -m pip install .
+    GOTO end
 
-    :: Install the local package in development (experimental) mode
+:add_dev_dependencies
+    CALL conda env update -p %CONDA_DIR% -f environment_dev.yml
     CALL conda run -p %CONDA_DIR% python -m pip install -e .
-
     GOTO end
 
 :: Remove the environment
@@ -64,25 +77,12 @@ GOTO %1
     CALL conda env remove -p %CONDA_DIR% -y
 	GOTO end
 
-:: Start Jupyter Label
+:: Start Jupyter
 :jupyter
     CALL conda run -p %CONDA_DIR% python -m jupyterlab --ip=0.0.0.0 --allow-root --NotebookApp.token=""
     GOTO end
 
-:: Make the package for uploading
-:wheel
-
-    :: Build the pip package
-    CALL conda run -p %CONDA_DIR% python -m build --wheel
-
-    GOTO end
-
-:: Run all tests in module
-:test
-	CALL conda run -p %CONDA_DIR% pytest "%~dp0testing"
-	GOTO end
-
-:: black formatting
+:: code formatting
 :black
     CALL conda run -p %CONDA_dIR% black src/ --verbose
     GOTO end
